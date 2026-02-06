@@ -3,6 +3,12 @@
 ![SolGuard AI Banner](https://img.shields.io/badge/Solana-Blockchain-9945FF?style=for-the-badge&logo=solana)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-Testnet-yellow?style=for-the-badge)
+![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Anchor](https://img.shields.io/badge/Anchor-Framework-purple?style=for-the-badge)
+![GitHub Stars](https://img.shields.io/github/stars/Momo111psy/solguard-ai?style=for-the-badge)
+![GitHub Issues](https://img.shields.io/github/issues/Momo111psy/solguard-ai?style=for-the-badge)
+![Contributions Welcome](https://img.shields.io/badge/Contributions-Welcome-brightgreen?style=for-the-badge)
 
 > **The world's first AI-powered, autonomous security monitoring and validator health optimization protocol built natively on Solana.**
 
