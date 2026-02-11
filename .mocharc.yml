@@ -1,0 +1,3 @@
+require: ts-mocha
+timeout: 60000
+spec: tests/**/*.ts
