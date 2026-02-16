@@ -79,9 +79,6 @@ echo -e "${YELLOW}Step 5: Building all programs...${NC}"
 echo "This will take 5-10 minutes..."
 echo ""
 
-# Use nightly Rust to avoid Cargo.lock issues
-rustup override set nightly
-
 # Build with proper flags
 if anchor build; then
     echo -e "${GREEN}✅ Build successful!${NC}"
@@ -93,7 +90,7 @@ fi
 echo ""
 echo -e "${YELLOW}Step 6: Verifying build artifacts...${NC}"
 
-PROGRAMS=("security_oracle" "validator_registry" "governance" "transparency_vault")
+PROGRAMS=("security_oracle" "validator_registry" "governance_module" "transparency_vault" "solguard_token")
 ALL_BUILT=true
 
 for program in "${PROGRAMS[@]}"; do
@@ -145,14 +142,19 @@ if [ -f "target/deploy/validator_registry-keypair.json" ]; then
     echo "Validator Registry:   $VALIDATOR_REGISTRY_ID"
 fi
 
-if [ -f "target/deploy/governance-keypair.json" ]; then
-    GOVERNANCE_ID=$(solana-keygen pubkey target/deploy/governance-keypair.json)
+if [ -f "target/deploy/governance_module-keypair.json" ]; then
+    GOVERNANCE_ID=$(solana-keygen pubkey target/deploy/governance_module-keypair.json)
     echo "Governance:           $GOVERNANCE_ID"
 fi
 
 if [ -f "target/deploy/transparency_vault-keypair.json" ]; then
     TRANSPARENCY_VAULT_ID=$(solana-keygen pubkey target/deploy/transparency_vault-keypair.json)
     echo "Transparency Vault:   $TRANSPARENCY_VAULT_ID"
+fi
+
+if [ -f "target/deploy/solguard_token-keypair.json" ]; then
+    SOLGUARD_TOKEN_ID=$(solana-keygen pubkey target/deploy/solguard_token-keypair.json)
+    echo "SolGuard Token:       $SOLGUARD_TOKEN_ID"
 fi
 
 echo ""

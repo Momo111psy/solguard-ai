@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
-declare_id!("SoLGuaRD11111111111111111111111111111111111");
+declare_id!("HQqeQGBF1uQSEuhvBfnomn2jLidndFad9AhTt5siamNp");
 
 #[program]
 pub mod security_oracle {
@@ -23,8 +23,11 @@ pub mod security_oracle {
         oracle.threats_detected = 0;
         oracle.last_update = Clock::get()?.unix_timestamp;
         oracle.is_active = true;
-        
-        msg!("Security Oracle initialized with model version: {}", oracle.model_version);
+
+        msg!(
+            "Security Oracle initialized with model version: {}",
+            oracle.model_version
+        );
         Ok(())
     }
 
@@ -36,9 +39,9 @@ pub mod security_oracle {
     ) -> Result<()> {
         let oracle = &mut ctx.accounts.oracle;
         let analysis = &mut ctx.accounts.analysis;
-        
+
         require!(oracle.is_active, ErrorCode::OracleInactive);
-        
+
         analysis.program_address = program_address;
         analysis.code_hash = code_hash;
         analysis.timestamp = Clock::get()?.unix_timestamp;
@@ -46,16 +49,16 @@ pub mod security_oracle {
         analysis.security_score = 0;
         analysis.vulnerability_count = 0;
         analysis.analyzer = ctx.accounts.analyzer.key();
-        
+
         oracle.total_scans += 1;
-        
+
         msg!("Program analysis initiated for: {}", program_address);
         emit!(AnalysisRequested {
             program_address,
             analyzer: ctx.accounts.analyzer.key(),
             timestamp: analysis.timestamp,
         });
-        
+
         Ok(())
     }
 
@@ -64,18 +67,21 @@ pub mod security_oracle {
         ctx: Context<UpdateAnalysis>,
         security_score: u8,
         vulnerability_count: u16,
-        vulnerabilities: Vec<Vulnerability>,
-        recommendations: String,
+        _vulnerabilities: Vec<Vulnerability>,
+        _recommendations: String,
     ) -> Result<()> {
         let oracle = &mut ctx.accounts.oracle;
         let analysis = &mut ctx.accounts.analysis;
-        
+
         require!(
             ctx.accounts.update_authority.key() == oracle.update_authority,
             ErrorCode::UnauthorizedUpdate
         );
-        require!(analysis.status == AnalysisStatus::Pending, ErrorCode::AnalysisAlreadyCompleted);
-        
+        require!(
+            analysis.status == AnalysisStatus::Pending,
+            ErrorCode::AnalysisAlreadyCompleted
+        );
+
         analysis.security_score = security_score;
         analysis.vulnerability_count = vulnerability_count;
         analysis.status = if security_score >= oracle.threshold_score {
@@ -84,21 +90,27 @@ pub mod security_oracle {
             AnalysisStatus::Unsafe
         };
         analysis.completed_at = Clock::get()?.unix_timestamp;
-        
+
         if analysis.status == AnalysisStatus::Unsafe {
             oracle.threats_detected += 1;
         }
-        
+
         oracle.last_update = Clock::get()?.unix_timestamp;
-        
-        msg!("Analysis completed - Score: {}, Vulnerabilities: {}", security_score, vulnerability_count);
+
+        let final_status = analysis.status.clone();
+
+        msg!(
+            "Analysis completed - Score: {}, Vulnerabilities: {}",
+            security_score,
+            vulnerability_count
+        );
         emit!(AnalysisCompleted {
             program_address: analysis.program_address,
             security_score,
-            status: analysis.status,
+            status: final_status,
             timestamp: analysis.completed_at,
         });
-        
+
         Ok(())
     }
 
@@ -112,9 +124,9 @@ pub mod security_oracle {
     ) -> Result<()> {
         let incident = &mut ctx.accounts.incident;
         let reporter_stake = &ctx.accounts.reporter_stake;
-        
+
         require!(reporter_stake.amount >= 1000, ErrorCode::InsufficientStake);
-        
+
         incident.program_address = program_address;
         incident.reporter = ctx.accounts.reporter.key();
         incident.incident_type = incident_type;
@@ -124,7 +136,7 @@ pub mod security_oracle {
         incident.verified = false;
         incident.votes_for = 0;
         incident.votes_against = 0;
-        
+
         msg!("Security incident reported for: {}", program_address);
         emit!(IncidentReported {
             program_address,
@@ -132,34 +144,31 @@ pub mod security_oracle {
             severity,
             timestamp: incident.timestamp,
         });
-        
+
         Ok(())
     }
 
     /// Vote on reported incident (stake-weighted)
-    pub fn vote_incident(
-        ctx: Context<VoteIncident>,
-        support: bool,
-    ) -> Result<()> {
+    pub fn vote_incident(ctx: Context<VoteIncident>, support: bool) -> Result<()> {
         let incident = &mut ctx.accounts.incident;
         let voter_stake = &ctx.accounts.voter_stake;
-        
+
         require!(!incident.verified, ErrorCode::IncidentAlreadyVerified);
-        
+
         let vote_weight = voter_stake.amount / 100; // 1 vote per 100 tokens
-        
+
         if support {
             incident.votes_for += vote_weight;
         } else {
             incident.votes_against += vote_weight;
         }
-        
+
         // Auto-verify if threshold reached
         if incident.votes_for >= 10000 {
             incident.verified = true;
             msg!("Incident verified by community consensus");
         }
-        
+
         Ok(())
     }
 
@@ -170,16 +179,16 @@ pub mod security_oracle {
         new_threshold: u8,
     ) -> Result<()> {
         let oracle = &mut ctx.accounts.oracle;
-        
+
         require!(
             ctx.accounts.authority.key() == oracle.authority,
             ErrorCode::Unauthorized
         );
-        
+
         oracle.model_version = new_model_version.clone();
         oracle.threshold_score = new_threshold;
         oracle.last_update = Clock::get()?.unix_timestamp;
-        
+
         msg!("Model updated to version: {}", new_model_version);
         Ok(())
     }
@@ -187,12 +196,12 @@ pub mod security_oracle {
     /// Emergency pause (security measure)
     pub fn pause_oracle(ctx: Context<PauseOracle>) -> Result<()> {
         let oracle = &mut ctx.accounts.oracle;
-        
+
         require!(
             ctx.accounts.authority.key() == oracle.authority,
             ErrorCode::Unauthorized
         );
-        
+
         oracle.is_active = false;
         msg!("Security Oracle paused");
         Ok(())
@@ -201,12 +210,12 @@ pub mod security_oracle {
     /// Resume operations
     pub fn resume_oracle(ctx: Context<ResumeOracle>) -> Result<()> {
         let oracle = &mut ctx.accounts.oracle;
-        
+
         require!(
             ctx.accounts.authority.key() == oracle.authority,
             ErrorCode::Unauthorized
         );
-        
+
         oracle.is_active = true;
         msg!("Security Oracle resumed");
         Ok(())
@@ -277,6 +286,8 @@ pub struct AnalyzeProgram<'info> {
         init,
         payer = analyzer,
         space = 8 + 32 + 32 + 8 + 8 + 1 + 1 + 2 + 32,
+        seeds = [b"analysis", oracle.key().as_ref(), analyzer.key().as_ref()],
+        bump
     )]
     pub analysis: Account<'info, ProgramAnalysis>,
     #[account(mut)]

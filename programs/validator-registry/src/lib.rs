@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer, Mint};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-declare_id!("VaLiDaToR11111111111111111111111111111111111");
+declare_id!("FyDxHtfbHxm61nV2DMGXdxCrmkNHt6GacuGbXJDbr8Ap");
 
 #[program]
 pub mod validator_registry {
@@ -22,7 +22,7 @@ pub mod validator_registry {
         registry.total_rewards_distributed = 0;
         registry.nakamoto_coefficient = 0;
         registry.last_update = Clock::get()?.unix_timestamp;
-        
+
         msg!("Validator Registry initialized");
         Ok(())
     }
@@ -37,13 +37,13 @@ pub mod validator_registry {
         let registry = &mut ctx.accounts.registry;
         let validator = &mut ctx.accounts.validator;
         let stake_account = &ctx.accounts.stake_account;
-        
+
         require!(
             stake_account.amount >= registry.min_stake_requirement,
             ErrorCode::InsufficientStake
         );
         require!(commission_rate <= 100, ErrorCode::InvalidCommissionRate);
-        
+
         validator.validator_pubkey = validator_pubkey;
         validator.operator = ctx.accounts.operator.key();
         validator.commission_rate = commission_rate;
@@ -56,10 +56,10 @@ pub mod validator_registry {
         validator.is_active = true;
         validator.metadata_uri = metadata_uri;
         validator.health_score = 100;
-        
+
         registry.total_validators += 1;
         registry.active_validators += 1;
-        
+
         msg!("Validator registered: {}", validator_pubkey);
         emit!(ValidatorRegistered {
             validator_pubkey,
@@ -67,7 +67,7 @@ pub mod validator_registry {
             stake: stake_account.amount,
             timestamp: validator.registration_time,
         });
-        
+
         Ok(())
     }
 
@@ -78,81 +78,84 @@ pub mod validator_registry {
         uptime_percentage: u8,
     ) -> Result<()> {
         let validator = &mut ctx.accounts.validator;
-        
+
         require!(validator.is_active, ErrorCode::ValidatorInactive);
-        
+        require!(uptime_percentage <= 100, ErrorCode::InvalidUptime);
+
         validator.blocks_produced += blocks_produced;
         validator.uptime_percentage = uptime_percentage;
-        
+
         // Calculate performance score (weighted average)
         let uptime_score = uptime_percentage as u16;
         let production_score = if blocks_produced > 0 { 100 } else { 50 };
         validator.performance_score = ((uptime_score + production_score) / 2) as u8;
-        
+
         // Calculate health score
         validator.health_score = calculate_health_score(
             validator.performance_score,
             validator.total_stake,
             validator.uptime_percentage,
         );
-        
-        msg!("Performance updated - Score: {}, Health: {}", 
-            validator.performance_score, validator.health_score);
-        
+
+        msg!(
+            "Performance updated - Score: {}, Health: {}",
+            validator.performance_score,
+            validator.health_score
+        );
+
         Ok(())
     }
 
     /// Claim validator rewards
     pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
-        let registry = &mut ctx.accounts.registry;
-        let validator = &mut ctx.accounts.validator;
         let clock = Clock::get()?;
-        
+
+        let registry_info = ctx.accounts.registry.to_account_info();
+        let validator = &mut ctx.accounts.validator;
+
         require!(validator.is_active, ErrorCode::ValidatorInactive);
-        
+
         let time_elapsed = clock.unix_timestamp - validator.last_reward_claim;
         require!(time_elapsed >= 86400, ErrorCode::ClaimTooEarly); // 24 hours
-        
+
         // Calculate rewards based on stake, performance, and time
-        let base_reward = (validator.total_stake * registry.reward_rate) / 10000;
+        let base_reward = (validator.total_stake * ctx.accounts.registry.reward_rate) / 10000;
         let performance_multiplier = validator.performance_score as u64;
         let health_multiplier = validator.health_score as u64;
         let reward = (base_reward * performance_multiplier * health_multiplier) / 10000;
-        
+
         // Transfer rewards
         let cpi_accounts = Transfer {
             from: ctx.accounts.reward_vault.to_account_info(),
             to: ctx.accounts.validator_rewards.to_account_info(),
-            authority: ctx.accounts.registry.to_account_info(),
+            authority: registry_info,
         };
         let cpi_program = ctx.accounts.token_program.to_account_info();
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
         token::transfer(cpi_ctx, reward)?;
-        
+
+        let registry = &mut ctx.accounts.registry;
         validator.last_reward_claim = clock.unix_timestamp;
         registry.total_rewards_distributed += reward;
-        
+
         msg!("Rewards claimed: {} tokens", reward);
         emit!(RewardsClaimed {
             validator: validator.validator_pubkey,
             amount: reward,
             timestamp: clock.unix_timestamp,
         });
-        
+
         Ok(())
     }
 
     /// Delegate stake to validator
-    pub fn delegate_stake(
-        ctx: Context<DelegateStake>,
-        amount: u64,
-    ) -> Result<()> {
+    pub fn delegate_stake(ctx: Context<DelegateStake>, amount: u64) -> Result<()> {
         let validator = &mut ctx.accounts.validator;
         let delegation = &mut ctx.accounts.delegation;
-        
+
         require!(validator.is_active, ErrorCode::ValidatorInactive);
         require!(amount > 0, ErrorCode::InvalidAmount);
-        
+
         // Transfer tokens to stake account
         let cpi_accounts = Transfer {
             from: ctx.accounts.delegator_token.to_account_info(),
@@ -162,48 +165,52 @@ pub mod validator_registry {
         let cpi_program = ctx.accounts.token_program.to_account_info();
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
         token::transfer(cpi_ctx, amount)?;
-        
+
         delegation.delegator = ctx.accounts.delegator.key();
         delegation.validator = validator.validator_pubkey;
         delegation.amount = amount;
         delegation.delegation_time = Clock::get()?.unix_timestamp;
         delegation.is_active = true;
-        
+
         validator.total_stake += amount;
-        
-        msg!("Stake delegated: {} tokens to {}", amount, validator.validator_pubkey);
+
+        msg!(
+            "Stake delegated: {} tokens to {}",
+            amount,
+            validator.validator_pubkey
+        );
         Ok(())
     }
 
     /// Undelegate stake from validator
-    pub fn undelegate_stake(
-        ctx: Context<UndelegateStake>,
-    ) -> Result<()> {
+    pub fn undelegate_stake(ctx: Context<UndelegateStake>) -> Result<()> {
+        let clock = Clock::get()?;
+
+        let validator_info = ctx.accounts.validator.to_account_info();
         let validator = &mut ctx.accounts.validator;
         let delegation = &mut ctx.accounts.delegation;
-        let clock = Clock::get()?;
-        
+
         require!(delegation.is_active, ErrorCode::DelegationNotActive);
         require!(
             clock.unix_timestamp - delegation.delegation_time >= 604800, // 7 days
             ErrorCode::UndelegationTooEarly
         );
-        
+
         let amount = delegation.amount;
-        
+
         // Transfer tokens back
         let cpi_accounts = Transfer {
             from: ctx.accounts.validator_stake.to_account_info(),
             to: ctx.accounts.delegator_token.to_account_info(),
-            authority: ctx.accounts.validator.to_account_info(),
+            authority: validator_info,
         };
         let cpi_program = ctx.accounts.token_program.to_account_info();
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
         token::transfer(cpi_ctx, amount)?;
-        
+
         validator.total_stake -= amount;
         delegation.is_active = false;
-        
+
         msg!("Stake undelegated: {} tokens", amount);
         Ok(())
     }
@@ -211,20 +218,20 @@ pub mod validator_registry {
     /// Calculate and update Nakamoto Coefficient
     pub fn update_nakamoto_coefficient(ctx: Context<UpdateNakamoto>) -> Result<()> {
         let registry = &mut ctx.accounts.registry;
-        
+
         // This would be called periodically by a crank/keeper
         // Simplified calculation for demonstration
         let coefficient = calculate_nakamoto_coefficient(registry.active_validators);
         registry.nakamoto_coefficient = coefficient;
         registry.last_update = Clock::get()?.unix_timestamp;
-        
+
         msg!("Nakamoto Coefficient updated: {}", coefficient);
         emit!(NakamotoUpdated {
             coefficient,
             active_validators: registry.active_validators,
             timestamp: registry.last_update,
         });
-        
+
         Ok(())
     }
 
@@ -232,16 +239,16 @@ pub mod validator_registry {
     pub fn deactivate_validator(ctx: Context<DeactivateValidator>) -> Result<()> {
         let registry = &mut ctx.accounts.registry;
         let validator = &mut ctx.accounts.validator;
-        
+
         require!(
-            ctx.accounts.authority.key() == registry.authority ||
-            ctx.accounts.authority.key() == validator.operator,
+            ctx.accounts.authority.key() == registry.authority
+                || ctx.accounts.authority.key() == validator.operator,
             ErrorCode::Unauthorized
         );
-        
+
         validator.is_active = false;
         registry.active_validators -= 1;
-        
+
         msg!("Validator deactivated: {}", validator.validator_pubkey);
         Ok(())
     }
@@ -250,17 +257,17 @@ pub mod validator_registry {
     pub fn reactivate_validator(ctx: Context<ReactivateValidator>) -> Result<()> {
         let registry = &mut ctx.accounts.registry;
         let validator = &mut ctx.accounts.validator;
-        
+
         require!(
             ctx.accounts.authority.key() == validator.operator,
             ErrorCode::Unauthorized
         );
         require!(!validator.is_active, ErrorCode::ValidatorAlreadyActive);
-        
+
         validator.is_active = true;
         validator.health_score = 100; // Reset health score
         registry.active_validators += 1;
-        
+
         msg!("Validator reactivated: {}", validator.validator_pubkey);
         Ok(())
     }
@@ -270,9 +277,13 @@ pub mod validator_registry {
 
 fn calculate_health_score(performance: u8, stake: u64, uptime: u8) -> u8 {
     let performance_weight = (performance as u32 * 40) / 100;
-    let stake_weight = if stake > 100_000_000_000 { 30 } else { (stake / 3_333_333_333) as u32 };
+    let stake_weight = if stake > 100_000_000_000 {
+        30
+    } else {
+        (stake / 3_333_333_333) as u32
+    };
     let uptime_weight = (uptime as u32 * 30) / 100;
-    
+
     ((performance_weight + stake_weight + uptime_weight) as u8).min(100)
 }
 
@@ -362,9 +373,9 @@ pub struct RegisterValidator<'info> {
 
 #[derive(Accounts)]
 pub struct UpdatePerformance<'info> {
-    #[account(mut)]
+    #[account(mut, has_one = operator)]
     pub validator: Account<'info, ValidatorInfo>,
-    pub authority: Signer<'info>,
+    pub operator: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -485,4 +496,6 @@ pub enum ErrorCode {
     Unauthorized,
     #[msg("Validator is already active")]
     ValidatorAlreadyActive,
+    #[msg("Invalid uptime percentage (must be 0-100)")]
+    InvalidUptime,
 }

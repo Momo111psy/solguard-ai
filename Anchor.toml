@@ -7,16 +7,18 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-security_oracle = "SoLGuaRD11111111111111111111111111111111111"
-validator_registry = "VaLiDaToR11111111111111111111111111111111111"
-transparency_vault = "TrAnSpArEnCy1111111111111111111111111111111"
-governance_module = "GoVeRnAnCe1111111111111111111111111111111111"
+security_oracle = "HQqeQGBF1uQSEuhvBfnomn2jLidndFad9AhTt5siamNp"
+validator_registry = "FyDxHtfbHxm61nV2DMGXdxCrmkNHt6GacuGbXJDbr8Ap"
+transparency_vault = "J4jRzrqqQaH7uMxQF7ZSXcp2jYDHwRbBBksdmFxfdQp"
+governance_module = "CBxVg7WPSecbNKcqNJxGqWeNWHYJ3sSfq5U6XgaJbqdu"
+solguard_token = "3WB548f6DytYL9mGizZ55orA3ExAiU5shxNSTQ9Cgo9m"
 
 [programs.devnet]
-security_oracle = "SoLGuaRD11111111111111111111111111111111111"
-validator_registry = "VaLiDaToR11111111111111111111111111111111111"
-transparency_vault = "TrAnSpArEnCy1111111111111111111111111111111"
-governance_module = "GoVeRnAnCe1111111111111111111111111111111111"
+security_oracle = "HQqeQGBF1uQSEuhvBfnomn2jLidndFad9AhTt5siamNp"
+validator_registry = "FyDxHtfbHxm61nV2DMGXdxCrmkNHt6GacuGbXJDbr8Ap"
+transparency_vault = "J4jRzrqqQaH7uMxQF7ZSXcp2jYDHwRbBBksdmFxfdQp"
+governance_module = "CBxVg7WPSecbNKcqNJxGqWeNWHYJ3sSfq5U6XgaJbqdu"
+solguard_token = "3WB548f6DytYL9mGizZ55orA3ExAiU5shxNSTQ9Cgo9m"
 
 [registry]
 url = "https://api.apr.dev"

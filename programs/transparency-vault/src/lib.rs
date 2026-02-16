@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("TrAnSpArEnCy1111111111111111111111111111111");
+declare_id!("J4jRzrqqQaH7uMxQF7ZSXcp2jYDHwRbBBksdmFxfdQp");
 
 #[program]
 pub mod transparency_vault {
@@ -13,7 +13,7 @@ pub mod transparency_vault {
         vault.total_programs = 0;
         vault.verified_programs = 0;
         vault.last_update = Clock::get()?.unix_timestamp;
-        
+
         msg!("Transparency Vault initialized");
         Ok(())
     }
@@ -29,7 +29,7 @@ pub mod transparency_vault {
     ) -> Result<()> {
         let vault = &mut ctx.accounts.vault;
         let program_record = &mut ctx.accounts.program_record;
-        
+
         program_record.program_id = program_id;
         program_record.idl_hash = idl_hash;
         program_record.idl_uri = idl_uri;
@@ -40,41 +40,38 @@ pub mod transparency_vault {
         program_record.is_verified = false;
         program_record.verification_count = 0;
         program_record.last_update = Clock::get()?.unix_timestamp;
-        
+
         vault.total_programs += 1;
-        
+
         msg!("Program registered: {}", program_id);
         emit!(ProgramRegistered {
             program_id,
             deployer: ctx.accounts.deployer.key(),
             timestamp: program_record.registration_time,
         });
-        
+
         Ok(())
     }
 
     /// Verify a program's IDL (community verification)
-    pub fn verify_program(
-        ctx: Context<VerifyProgram>,
-        verification_proof: [u8; 32],
-    ) -> Result<()> {
+    pub fn verify_program(ctx: Context<VerifyProgram>, verification_proof: [u8; 32]) -> Result<()> {
         let vault = &mut ctx.accounts.vault;
         let program_record = &mut ctx.accounts.program_record;
         let verification = &mut ctx.accounts.verification;
-        
+
         verification.program_id = program_record.program_id;
         verification.verifier = ctx.accounts.verifier.key();
         verification.verification_proof = verification_proof;
         verification.timestamp = Clock::get()?.unix_timestamp;
         verification.is_valid = true;
-        
+
         program_record.verification_count += 1;
-        
+
         // Auto-verify after 3 independent verifications
         if program_record.verification_count >= 3 && !program_record.is_verified {
             program_record.is_verified = true;
             vault.verified_programs += 1;
-            
+
             msg!("Program verified: {}", program_record.program_id);
             emit!(ProgramVerified {
                 program_id: program_record.program_id,
@@ -82,7 +79,7 @@ pub mod transparency_vault {
                 timestamp: Clock::get()?.unix_timestamp,
             });
         }
-        
+
         Ok(())
     }
 
@@ -94,19 +91,19 @@ pub mod transparency_vault {
         new_build_hash: [u8; 32],
     ) -> Result<()> {
         let program_record = &mut ctx.accounts.program_record;
-        
+
         require!(
             ctx.accounts.deployer.key() == program_record.deployer,
             ErrorCode::Unauthorized
         );
-        
+
         program_record.idl_hash = new_idl_hash;
         program_record.idl_uri = new_idl_uri;
         program_record.build_hash = new_build_hash;
         program_record.is_verified = false; // Reset verification
         program_record.verification_count = 0;
         program_record.last_update = Clock::get()?.unix_timestamp;
-        
+
         msg!("Program updated: {}", program_record.program_id);
         Ok(())
     }
@@ -121,7 +118,7 @@ pub mod transparency_vault {
     ) -> Result<()> {
         let program_record = &mut ctx.accounts.program_record;
         let audit_report = &mut ctx.accounts.audit_report;
-        
+
         audit_report.program_id = program_record.program_id;
         audit_report.auditor = auditor;
         audit_report.report_uri = report_uri;
@@ -129,7 +126,7 @@ pub mod transparency_vault {
         audit_report.severity_score = severity_score;
         audit_report.audit_date = Clock::get()?.unix_timestamp;
         audit_report.submitted_by = ctx.accounts.submitter.key();
-        
+
         msg!("Audit report added for: {}", program_record.program_id);
         emit!(AuditReportAdded {
             program_id: program_record.program_id,
@@ -137,40 +134,44 @@ pub mod transparency_vault {
             severity: severity_score,
             timestamp: audit_report.audit_date,
         });
-        
+
         Ok(())
     }
 
     /// Query program transparency score
     pub fn get_transparency_score(ctx: Context<GetTransparencyScore>) -> Result<u8> {
         let program_record = &ctx.accounts.program_record;
-        
+
         let mut score: u8 = 0;
-        
+
         // IDL published: +30 points
         if !program_record.idl_uri.is_empty() {
             score += 30;
         }
-        
+
         // Source code published: +30 points
         if !program_record.source_code_uri.is_empty() {
             score += 30;
         }
-        
+
         // Verified: +20 points
         if program_record.is_verified {
             score += 20;
         }
-        
+
         // Multiple verifications: +10 points
         if program_record.verification_count >= 3 {
             score += 10;
         }
-        
+
         // Has audit: +10 points (would check audit_report existence)
         score += 10;
-        
-        msg!("Transparency score for {}: {}", program_record.program_id, score);
+
+        msg!(
+            "Transparency score for {}: {}",
+            program_record.program_id,
+            score
+        );
         Ok(score)
     }
 }

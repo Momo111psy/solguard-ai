@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
 
-declare_id!("GoVeRnAnCe1111111111111111111111111111111111");
+declare_id!("CBxVg7WPSecbNKcqNJxGqWeNWHYJ3sSfq5U6XgaJbqdu");
 
 #[program]
 pub mod governance_module {
@@ -19,7 +19,7 @@ pub mod governance_module {
         governance.quorum_percentage = quorum_percentage;
         governance.total_proposals = 0;
         governance.executed_proposals = 0;
-        
+
         msg!("Governance initialized");
         Ok(())
     }
@@ -35,9 +35,9 @@ pub mod governance_module {
         let governance = &mut ctx.accounts.governance;
         let proposal = &mut ctx.accounts.proposal;
         let proposer_stake = &ctx.accounts.proposer_stake;
-        
+
         require!(proposer_stake.amount >= 10000, ErrorCode::InsufficientStake);
-        
+
         proposal.proposer = ctx.accounts.proposer.key();
         proposal.title = title;
         proposal.description = description;
@@ -48,29 +48,26 @@ pub mod governance_module {
         proposal.votes_for = 0;
         proposal.votes_against = 0;
         proposal.status = ProposalStatus::Active;
-        
+
         governance.total_proposals += 1;
-        
+
         msg!("Proposal created: {}", proposal.title);
         emit!(ProposalCreated {
             proposal_id: proposal.key(),
             proposer: ctx.accounts.proposer.key(),
             timestamp: proposal.created_at,
         });
-        
+
         Ok(())
     }
 
     /// Vote on a proposal
-    pub fn vote(
-        ctx: Context<Vote>,
-        support: bool,
-    ) -> Result<()> {
+    pub fn vote(ctx: Context<Vote>, support: bool) -> Result<()> {
         let proposal = &mut ctx.accounts.proposal;
         let voter_stake = &ctx.accounts.voter_stake;
         let vote_record = &mut ctx.accounts.vote_record;
         let clock = Clock::get()?;
-        
+
         require!(
             clock.unix_timestamp <= proposal.voting_ends_at,
             ErrorCode::VotingPeriodEnded
@@ -79,22 +76,26 @@ pub mod governance_module {
             proposal.status == ProposalStatus::Active,
             ErrorCode::ProposalNotActive
         );
-        
+
         let vote_weight = voter_stake.amount / 1000; // 1 vote per 1000 tokens
-        
+
         vote_record.voter = ctx.accounts.voter.key();
         vote_record.proposal = proposal.key();
         vote_record.support = support;
         vote_record.weight = vote_weight;
         vote_record.timestamp = clock.unix_timestamp;
-        
+
         if support {
             proposal.votes_for += vote_weight;
         } else {
             proposal.votes_against += vote_weight;
         }
-        
-        msg!("Vote cast: {} with weight {}", if support { "For" } else { "Against" }, vote_weight);
+
+        msg!(
+            "Vote cast: {} with weight {}",
+            if support { "For" } else { "Against" },
+            vote_weight
+        );
         Ok(())
     }
 
@@ -103,7 +104,7 @@ pub mod governance_module {
         let governance = &mut ctx.accounts.governance;
         let proposal = &mut ctx.accounts.proposal;
         let clock = Clock::get()?;
-        
+
         require!(
             clock.unix_timestamp > proposal.voting_ends_at,
             ErrorCode::VotingPeriodNotEnded
@@ -112,15 +113,15 @@ pub mod governance_module {
             proposal.status == ProposalStatus::Active,
             ErrorCode::ProposalNotActive
         );
-        
+
         let total_votes = proposal.votes_for + proposal.votes_against;
         let quorum_met = total_votes >= 100000; // Simplified quorum check
         let passed = proposal.votes_for > proposal.votes_against;
-        
+
         if quorum_met && passed {
             proposal.status = ProposalStatus::Executed;
             governance.executed_proposals += 1;
-            
+
             // Execute based on proposal type
             match proposal.proposal_type {
                 ProposalType::ParameterChange => {
@@ -140,7 +141,7 @@ pub mod governance_module {
                     // Would execute emergency measures
                 }
             }
-            
+
             emit!(ProposalExecuted {
                 proposal_id: proposal.key(),
                 votes_for: proposal.votes_for,
@@ -149,9 +150,13 @@ pub mod governance_module {
             });
         } else {
             proposal.status = ProposalStatus::Rejected;
-            msg!("Proposal rejected - Quorum: {}, Passed: {}", quorum_met, passed);
+            msg!(
+                "Proposal rejected - Quorum: {}, Passed: {}",
+                quorum_met,
+                passed
+            );
         }
-        
+
         Ok(())
     }
 
@@ -159,7 +164,7 @@ pub mod governance_module {
     pub fn cancel_proposal(ctx: Context<CancelProposal>) -> Result<()> {
         let proposal = &mut ctx.accounts.proposal;
         let clock = Clock::get()?;
-        
+
         require!(
             ctx.accounts.proposer.key() == proposal.proposer,
             ErrorCode::Unauthorized
@@ -168,9 +173,9 @@ pub mod governance_module {
             clock.unix_timestamp <= proposal.voting_ends_at,
             ErrorCode::VotingPeriodEnded
         );
-        
+
         proposal.status = ProposalStatus::Cancelled;
-        
+
         msg!("Proposal cancelled");
         Ok(())
     }
